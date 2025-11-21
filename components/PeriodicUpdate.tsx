@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useMemo } from 'react';
 import { User, Equipment } from '../types';
 import Icon from './common/Icon';
@@ -19,48 +20,83 @@ const PeriodicUpdate: React.FC<PeriodicUpdateProps> = ({ currentUser, onUpdateSu
     const [searchTerm, setSearchTerm] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const splitCsvLine = (line: string): string[] => {
+    const splitCsvLine = (line: string, separator: string): string[] => {
         const result: string[] = [];
         let current = '';
         let inQuote = false;
-        const separator = ',';
         for (let i = 0; i < line.length; i++) {
             const char = line[i];
-            if (char === '"') inQuote = !inQuote;
-            else if (char === separator && !inQuote) {
+            if (char === '"') {
+                inQuote = !inQuote;
+            } else if (char === separator && !inQuote) {
                 result.push(current.trim().replace(/^"|"$/g, ''));
                 current = '';
-            } else current += char;
+            } else {
+                current += char;
+            }
         }
         result.push(current.trim().replace(/^"|"$/g, ''));
         return result;
     };
 
+    const normalizeHeader = (header: string): string => {
+        return header
+            .toUpperCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
+            .replace(/[^A-Z0-9]/g, ""); // Remove caracteres especiais e espaços
+    };
+
     const parseCsv = (fileText: string): PartialEquipment[] => {
-        const lines = fileText.trim().split(/\r\n|\n/);
+        const cleanText = fileText.replace(/^\uFEFF/, ''); // Remove BOM
+        const lines = cleanText.trim().split(/\r\n|\n/);
         if (lines.length < 2) throw new Error("O arquivo CSV deve conter um cabeçalho e dados.");
-        const header = splitCsvLine(lines[0]).map(h => h.trim().toUpperCase());
+
+        const headerLine = lines[0];
+        // Detect separator
+        const separator = (headerLine.match(/;/g) || []).length > (headerLine.match(/,/g) || []).length ? ';' : ',';
+        
+        const rawHeaders = splitCsvLine(headerLine, separator);
+        const header = rawHeaders.map(h => normalizeHeader(h));
+
+        // Mapeamento baseado nos cabeçalhos normalizados (sem acento, sem espaço, uppercase)
+        // CSV: "Nome do dispositivo" -> NOMEDODISPOSITIVO
+        // CSV: "Número de série" -> NUMERODESERIE
         const mappings: { [key: string]: keyof Equipment } = {
-            'NOMEDODISPOSITIVO': 'equipamento', 'NÚMERODESÉRIE': 'serial',
-            'NOMEDOUSUÁRIOATUAL': 'usuarioAtual', 'MARCA': 'brand', 'MODELO': 'model',
-            'EMAIL DO COLABORADOR': 'emailColaborador', 'IDENTIFICADOR': 'identificador',
-            'NOME DO SO': 'nomeSO', 'MEMÓRIA FÍSICA TOTAL': 'memoriaFisicaTotal',
-            'GRUPO DE POLÍTICAS': 'grupoPoliticas', 'PAÍS': 'pais', 'CIDADE': 'cidade',
-            'ESTADO/PROVÍNCIA': 'estadoProvincia'
+            'NOMEDODISPOSITIVO': 'equipamento',
+            'DISPOSITIVO': 'equipamento',
+            'NUMERODESERIE': 'serial',
+            'SERIAL': 'serial',
+            'NOMEDOUSUARIOATUAL': 'usuarioAtual',
+            'USUARIO': 'usuarioAtual',
+            'MARCA': 'brand',
+            'MODELO': 'model',
+            'EMAILDOCOLABORADOR': 'emailColaborador',
+            'EMAIL': 'emailColaborador',
+            'IDENTIFICADOR': 'identificador',
+            'NOMEDOSO': 'nomeSO',
+            'MEMORIAFISICATOTAL': 'memoriaFisicaTotal',
+            'GRUPODEPOLITICAS': 'grupoPoliticas',
+            'PAIS': 'pais',
+            'CIDADE': 'cidade',
+            'ESTADOPROVINCIA': 'estadoProvincia'
         };
 
         return lines.slice(1).map(row => {
             if (!row.trim()) return null;
-            const values = splitCsvLine(row);
+            const values = splitCsvLine(row, separator);
             const entry: PartialEquipment = {};
+            
             header.forEach((colName, index) => {
-                const normalizedColName = colName.replace(/[\s/]+/g, '').toUpperCase();
-                const mappedKey = mappings[normalizedColName] || mappings[colName];
+                const mappedKey = mappings[colName];
                 if (mappedKey && index < values.length) {
                     (entry as any)[mappedKey] = values[index]?.trim() || '';
                 }
             });
-            return (entry.serial && entry.serial.trim() !== '') ? entry : null;
+
+            // Validação mínima
+            if (!entry.serial || entry.serial.trim() === '') return null;
+            
+            return entry;
         }).filter((item): item is PartialEquipment => item !== null);
     };
 
@@ -73,6 +109,9 @@ const PeriodicUpdate: React.FC<PeriodicUpdateProps> = ({ currentUser, onUpdateSu
             const text = await csvFile.text();
             const data = parseCsv(text);
             setParsedData(data);
+            if (data.length === 0) {
+                setError("Nenhum dado válido encontrado. Verifique se as colunas 'Nome do dispositivo' e 'Número de série' existem.");
+            }
         } catch (e: any) {
             setError(`Falha ao processar arquivo: ${e.message}`);
         } finally {
@@ -82,14 +121,18 @@ const PeriodicUpdate: React.FC<PeriodicUpdateProps> = ({ currentUser, onUpdateSu
 
     const handleSaveToSystem = async () => {
         if (parsedData.length === 0) return;
-        if (!window.confirm(`Esta ação irá atualizar ${parsedData.length} registros no inventário (adicionando novos e atualizando existentes). Nenhum item será removido. Deseja continuar?`)) return;
+        if (!window.confirm(`Esta ação irá atualizar ${parsedData.length} registros no inventário (adicionando novos e atualizando existentes baseados no Serial). Deseja continuar?`)) return;
         
         setIsSaving(true);
         setError(null);
         try {
             const result = await periodicUpdateEquipment(parsedData, currentUser.username);
             if (result.success) {
+                alert(result.message);
                 onUpdateSuccess();
+                setParsedData([]);
+                setCsvFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
             } else {
                 setError(`Falha ao salvar no sistema: ${result.message}`);
             }
@@ -140,7 +183,7 @@ const PeriodicUpdate: React.FC<PeriodicUpdateProps> = ({ currentUser, onUpdateSu
             {error && <div className="mt-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert"><p>{error}</p></div>}
 
             {parsedData.length > 0 && !isLoading && (
-                 <div className="mt-6">
+                 <div className="mt-6 animate-fade-in">
                     <h3 className="text-xl font-bold text-brand-dark dark:text-dark-text-primary mb-4">Pré-visualização da Atualização ({filteredData.length} de {parsedData.length} itens)</h3>
                     <input type="text" placeholder="Buscar nos resultados..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full p-2 mb-4 border dark:border-dark-border rounded-md bg-white dark:bg-gray-800" />
                     <div className="overflow-x-auto max-h-96 border dark:border-dark-border rounded-lg">
@@ -160,7 +203,7 @@ const PeriodicUpdate: React.FC<PeriodicUpdateProps> = ({ currentUser, onUpdateSu
                     <div className="mt-6 flex justify-end">
                         <button onClick={handleSaveToSystem} disabled={isSaving} className="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 disabled:bg-gray-400 flex items-center justify-center gap-2 text-lg font-semibold">
                             {isSaving ? <Icon name="LoaderCircle" className="animate-spin" /> : <Icon name="Save" />}
-                            {isSaving ? 'Salvando...' : '2. Salvar e Atualizar Inventário'}
+                            {isSaving ? '2. Salvar e Atualizar Inventário'}
                         </button>
                     </div>
                  </div>
