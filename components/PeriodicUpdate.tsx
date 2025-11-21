@@ -203,7 +203,7 @@ const PeriodicUpdate: React.FC<PeriodicUpdateProps> = ({ currentUser, onUpdateSu
                     <div className="mt-6 flex justify-end">
                         <button onClick={handleSaveToSystem} disabled={isSaving} className="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 disabled:bg-gray-400 flex items-center justify-center gap-2 text-lg font-semibold">
                             {isSaving ? <Icon name="LoaderCircle" className="animate-spin" /> : <Icon name="Save" />}
-                            {isSaving ? '2. Salvar e Atualizar Inventário'}
+                            {isSaving ? 'Salvando...' : '2. Salvar e Atualizar Inventário'}
                         </button>
                     </div>
                  </div>
