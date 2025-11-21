@@ -117,6 +117,17 @@ const ensureCriticalSchema = async (connection) => {
         console.error("Auto-repair warning for timestamp:", err.message);
     }
 
+    // Fix 3: Ensure 'audit_log' timestamp also has default value
+    try {
+        const [tsColsAudit] = await connection.query("SHOW COLUMNS FROM audit_log LIKE 'timestamp'");
+        if (tsColsAudit.length > 0) {
+             console.log("Auto-repair: Ensuring audit_log 'timestamp' has DEFAULT CURRENT_TIMESTAMP.");
+             await connection.query("ALTER TABLE audit_log MODIFY COLUMN timestamp DATETIME DEFAULT CURRENT_TIMESTAMP");
+        }
+    } catch (err) {
+        console.error("Auto-repair warning for audit_log timestamp:", err.message);
+    }
+
     console.log("Critical schema check complete.");
 };
 
@@ -300,7 +311,8 @@ app.post('/api/login', async (req, res) => {
         }
 
         await db.promise().query('UPDATE users SET lastLogin = NOW() WHERE id = ?', [user.id]);
-        await db.promise().query('INSERT INTO audit_log (username, action_type, target_type, target_id, details) VALUES (?, ?, ?, ?, ?)', [username, 'LOGIN', 'USER', user.id, 'User logged in']);
+        // Explicit timestamp NOW() for audit_log to fix potential "default value" errors
+        await db.promise().query('INSERT INTO audit_log (username, action_type, target_type, target_id, details, timestamp) VALUES (?, ?, ?, ?, ?, NOW())', [username, 'LOGIN', 'USER', user.id, 'User logged in']);
         
         const { password: _, twoFASecret: __, ...userWithoutSensitiveData } = user;
         res.json(userWithoutSensitiveData);
@@ -402,7 +414,8 @@ app.post('/api/equipment/periodic-update', async (req, res) => {
             }
         }
 
-        await connection.query('INSERT INTO audit_log (username, action_type, target_type, details) VALUES (?, ?, ?, ?)', 
+        // Explicit timestamp for audit_log
+        await connection.query('INSERT INTO audit_log (username, action_type, target_type, details, timestamp) VALUES (?, ?, ?, ?, NOW())', 
             [username, 'UPDATE', 'EQUIPMENT', `Atualização periódica de ${equipmentList.length} itens`]);
 
         await connection.commit();
@@ -444,7 +457,7 @@ app.post('/api/equipment/import', async (req, res) => {
              );
         }
 
-        await connection.query('INSERT INTO audit_log (username, action_type, target_type, details) VALUES (?, ?, ?, ?)', 
+        await connection.query('INSERT INTO audit_log (username, action_type, target_type, details, timestamp) VALUES (?, ?, ?, ?, NOW())', 
             [username, 'DELETE', 'DATABASE', 'Substituição total do inventário via consolidação']);
 
         await connection.commit();
@@ -493,7 +506,7 @@ app.post('/api/settings', async (req, res) => {
                 [key, String(value), String(value)]
             );
         }
-        await db.promise().query('INSERT INTO audit_log (username, action_type, target_type, details) VALUES (?, ?, ?, ?)', 
+        await db.promise().query('INSERT INTO audit_log (username, action_type, target_type, details, timestamp) VALUES (?, ?, ?, ?, NOW())', 
             [username, 'UPDATE', 'SETTINGS', 'Configurações do sistema atualizadas']);
         res.json({ success: true, message: "Configurações salvas" });
     } catch (error) {

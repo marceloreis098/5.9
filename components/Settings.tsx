@@ -392,26 +392,6 @@ const Settings: React.FC<SettingsProps> = ({ currentUser }) => {
             
             <form onSubmit={handleSaveSettings}>
                 <div className="space-y-8">
-                    {/* Status Box should be outside form but visually inside the flow */}
-                    <div className="p-6 bg-gray-50 dark:bg-dark-bg rounded-lg border dark:border-dark-border">
-                        <h3 className="text-lg font-bold text-brand-secondary dark:text-dark-text-primary mb-2 flex items-center gap-2">
-                            <Icon name="Database" size={20} />
-                            Status da Conexão com o Banco de Dados
-                        </h3>
-                        {apiStatus === null ? (
-                            <p className="text-gray-500">Verificando status...</p>
-                        ) : apiStatus.ok ? (
-                            <div className="p-3 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-md text-sm flex items-center gap-2">
-                                <Icon name="CircleCheck" size={18} />
-                                <span>Conexão com a API estabelecida com sucesso.</span>
-                            </div>
-                        ) : (
-                            <div className="p-3 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-md text-sm flex items-start gap-2">
-                                <Icon name="TriangleAlert" size={18} className="flex-shrink-0 mt-0.5" />
-                                <span><strong>Erro:</strong> {apiStatus.message}</span>
-                            </div>
-                        )}
-                    </div>
     
                     {activeSettingsTab === 'general' && (
                         <div className="space-y-8">
@@ -536,7 +516,7 @@ const Settings: React.FC<SettingsProps> = ({ currentUser }) => {
                                         name="is2faEnabled"
                                         checked={settings.is2faEnabled || false}
                                         onChange={handleSettingsChange}
-                                        description="Permite que os usuários configurem o 2FA em seus perfis."
+                                        description="Permite que os usuários façam login usando um Provedor de Identidade SAML (ex: Google Workspace, Azure AD)."
                                     />
                                     <SettingsToggle
                                         label="Exigir 2FA para todos os usuários"
