@@ -40,10 +40,11 @@ const PeriodicUpdate: React.FC<PeriodicUpdateProps> = ({ currentUser, onUpdateSu
     };
 
     const normalizeHeader = (header: string): string => {
+        // Remove accents, spaces, and special chars to make mapping robust
         return header
             .toUpperCase()
-            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove acentos
-            .replace(/[^A-Z0-9]/g, ""); // Remove caracteres especiais e espaços
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
+            .replace(/[^A-Z0-9]/g, ""); // Remove spaces and symbols
     };
 
     const parseCsv = (fileText: string): PartialEquipment[] => {
@@ -58,27 +59,44 @@ const PeriodicUpdate: React.FC<PeriodicUpdateProps> = ({ currentUser, onUpdateSu
         const rawHeaders = splitCsvLine(headerLine, separator);
         const header = rawHeaders.map(h => normalizeHeader(h));
 
-        // Mapeamento baseado nos cabeçalhos normalizados (sem acento, sem espaço, uppercase)
-        // CSV: "Nome do dispositivo" -> NOMEDODISPOSITIVO
-        // CSV: "Número de série" -> NUMERODESERIE
+        // Mapping based on normalized headers
+        // Example: "Nome do dispositivo" becomes "NOMEDODISPOSITIVO"
+        // "Número de série" becomes "NUMERODESERIE"
         const mappings: { [key: string]: keyof Equipment } = {
             'NOMEDODISPOSITIVO': 'equipamento',
             'DISPOSITIVO': 'equipamento',
+            'EQUIPAMENTO': 'equipamento',
+            
             'NUMERODESERIE': 'serial',
             'SERIAL': 'serial',
+            
             'NOMEDOUSUARIOATUAL': 'usuarioAtual',
+            'USUARIOATUAL': 'usuarioAtual',
             'USUARIO': 'usuarioAtual',
+            
             'MARCA': 'brand',
             'MODELO': 'model',
+            
             'EMAILDOCOLABORADOR': 'emailColaborador',
             'EMAIL': 'emailColaborador',
+            
             'IDENTIFICADOR': 'identificador',
             'NOMEDOSO': 'nomeSO',
+            'SO': 'nomeSO',
+            
             'MEMORIAFISICATOTAL': 'memoriaFisicaTotal',
+            'MEMORIA': 'memoriaFisicaTotal',
+            
             'GRUPODEPOLITICAS': 'grupoPoliticas',
+            'POLITICAS': 'grupoPoliticas',
+            
             'PAIS': 'pais',
             'CIDADE': 'cidade',
-            'ESTADOPROVINCIA': 'estadoProvincia'
+            'ESTADOPROVINCIA': 'estadoProvincia',
+            'ESTADO': 'estadoProvincia',
+            
+            'LOCAL': 'local',
+            'SETOR': 'setor'
         };
 
         return lines.slice(1).map(row => {
@@ -89,11 +107,14 @@ const PeriodicUpdate: React.FC<PeriodicUpdateProps> = ({ currentUser, onUpdateSu
             header.forEach((colName, index) => {
                 const mappedKey = mappings[colName];
                 if (mappedKey && index < values.length) {
-                    (entry as any)[mappedKey] = values[index]?.trim() || '';
+                    const value = values[index]?.trim();
+                    if (value) {
+                         (entry as any)[mappedKey] = value;
+                    }
                 }
             });
 
-            // Validação mínima
+            // Basic validation: Serial is required
             if (!entry.serial || entry.serial.trim() === '') return null;
             
             return entry;
@@ -110,7 +131,7 @@ const PeriodicUpdate: React.FC<PeriodicUpdateProps> = ({ currentUser, onUpdateSu
             const data = parseCsv(text);
             setParsedData(data);
             if (data.length === 0) {
-                setError("Nenhum dado válido encontrado. Verifique se as colunas 'Nome do dispositivo' e 'Número de série' existem.");
+                setError("Nenhum dado válido encontrado. Verifique se as colunas obrigatórias (ex: Número de série) existem.");
             }
         } catch (e: any) {
             setError(`Falha ao processar arquivo: ${e.message}`);
@@ -137,7 +158,11 @@ const PeriodicUpdate: React.FC<PeriodicUpdateProps> = ({ currentUser, onUpdateSu
                 setError(`Falha ao salvar no sistema: ${result.message}`);
             }
         } catch (e: any) {
-            setError(`Falha ao salvar no sistema: ${e.message}`);
+            let message = e.message || "Erro desconhecido";
+            if (message.includes('Failed to fetch')) {
+                message = "Erro de conexão com a API. Verifique se o servidor está rodando.";
+            }
+            setError(`Falha ao salvar no sistema: ${message}`);
         } finally {
             setIsSaving(false);
         }
