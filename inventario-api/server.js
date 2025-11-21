@@ -83,6 +83,17 @@ const ensureCriticalSchema = async (connection) => {
     
     // CRITICAL FIX FOR EQUIPMENT HISTORY
     await checkAndAddColumn('equipment_history', 'equipment_id', 'INT');
+
+    // Fix for legacy 'equipmentId' column blocking inserts if it exists and is NOT NULL
+    try {
+        const [camelCols] = await connection.query("SHOW COLUMNS FROM equipment_history LIKE 'equipmentId'");
+        if (camelCols.length > 0) {
+            console.log("Auto-repair: Found legacy column 'equipmentId', making it NULLABLE to prevent errors.");
+            await connection.query("ALTER TABLE equipment_history MODIFY COLUMN equipmentId INT NULL");
+        }
+    } catch (err) {
+        console.error("Auto-repair warning for equipmentId:", err.message);
+    }
     
     // Add extra fields for Absolute report
     await checkAndAddColumn('equipment', 'brand', 'VARCHAR(100)');
@@ -530,4 +541,3 @@ app.get('/api/approvals/pending', async (req, res) => {
     const [lic] = await db.promise().query('SELECT id, produto as name, "license" as itemType FROM licenses WHERE approval_status = "pending_approval"');
     res.json([...equip, ...lic]);
 });
-
