@@ -5,12 +5,8 @@ const mysql = require('mysql2');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const { authenticator } = require('otplib');
-const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const zlib = require('zlib');
-const crypto = require('crypto');
-const fetch = require('node-fetch');
 
 const app = express();
 
@@ -99,18 +95,18 @@ const ensureCriticalSchema = async (connection) => {
     // Ensure the correct snake_case column exists
     await checkAndAddColumn('equipment_history', 'equipment_id', 'INT');
 
-    // Fix 1: Make legacy 'equipmentId' (camelCase) nullable if it exists, so it doesn't block inserts
+    // Fix 1: Make legacy 'equipmentId' (camelCase) nullable if it exists to prevent "doesn't have a default value" error
     try {
         const [camelCols] = await connection.query("SHOW COLUMNS FROM equipment_history LIKE 'equipmentId'");
         if (camelCols.length > 0) {
-            console.log("Auto-repair: Making legacy column 'equipmentId' NULLABLE to prevent default value errors.");
+            console.log("Auto-repair: Making legacy column 'equipmentId' NULLABLE to fix Insert error.");
             await connection.query("ALTER TABLE equipment_history MODIFY COLUMN equipmentId INT NULL");
         }
     } catch (err) {
         console.error("Auto-repair warning for equipmentId:", err.message);
     }
 
-    // Fix 2: Ensure 'timestamp' has a default value of CURRENT_TIMESTAMP
+    // Fix 2: Ensure 'timestamp' has a default value of CURRENT_TIMESTAMP to prevent "doesn't have a default value" error
     try {
         const [tsCols] = await connection.query("SHOW COLUMNS FROM equipment_history LIKE 'timestamp'");
         if (tsCols.length > 0) {
@@ -372,7 +368,7 @@ app.post('/api/equipment/periodic-update', async (req, res) => {
                     
                     // Insert history
                     for (const entry of historyEntries) {
-                        // Ensure we use 'equipment_id' (snake_case) and provide explicit timestamp to avoid default value error
+                        // Use equipment_id (snake_case) and explicitly set timestamp with NOW() to avoid "Field doesn't have a default value" error
                         await connection.query(
                             'INSERT INTO equipment_history (equipment_id, timestamp, changedBy, changeType, from_value, to_value) VALUES (?, NOW(), ?, ?, ?, ?)',
                             [entry.equipment_id, entry.changedBy, entry.changeType, entry.from_value, entry.to_value]
@@ -398,6 +394,7 @@ app.post('/api/equipment/periodic-update', async (req, res) => {
                 
                 const newId = result.insertId;
                 // History log for creation
+                // Explicit timestamp NOW()
                 await connection.query(
                     'INSERT INTO equipment_history (equipment_id, timestamp, changedBy, changeType, from_value, to_value) VALUES (?, NOW(), ?, ?, ?, ?)',
                     [newId, username, 'CREATE (IMPORT)', null, 'Importado via Atualização Periódica']

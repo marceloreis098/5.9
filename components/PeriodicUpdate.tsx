@@ -59,9 +59,7 @@ const PeriodicUpdate: React.FC<PeriodicUpdateProps> = ({ currentUser, onUpdateSu
         const rawHeaders = splitCsvLine(headerLine, separator);
         const header = rawHeaders.map(h => normalizeHeader(h));
 
-        // Mapping based on normalized headers
-        // Example: "Nome do dispositivo" becomes "NOMEDODISPOSITIVO"
-        // "Número de série" becomes "NUMERODESERIE"
+        // Mapping based on normalized headers (e.g., "Número de série" becomes "NUMERODESERIE")
         const mappings: { [key: string]: keyof Equipment } = {
             'NOMEDODISPOSITIVO': 'equipamento',
             'DISPOSITIVO': 'equipamento',
@@ -226,7 +224,11 @@ const PeriodicUpdate: React.FC<PeriodicUpdateProps> = ({ currentUser, onUpdateSu
                         </table>
                     </div>
                     <div className="mt-6 flex justify-end">
-                        <button onClick={handleSaveToSystem} disabled={isSaving} className="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 disabled:bg-gray-400 flex items-center justify-center gap-2 text-lg font-semibold">
+                        <button
+                            onClick={handleSaveToSystem}
+                            disabled={isSaving}
+                            className="bg-green-600 text-white px-8 py-3 rounded-lg hover:bg-green-700 disabled:bg-gray-400 flex items-center justify-center gap-2 text-lg font-semibold"
+                        >
                             {isSaving ? <Icon name="LoaderCircle" className="animate-spin" /> : <Icon name="Save" />}
                             {isSaving ? 'Salvando...' : '2. Salvar e Atualizar Inventário'}
                         </button>
